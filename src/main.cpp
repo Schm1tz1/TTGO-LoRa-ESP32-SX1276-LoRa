@@ -10,6 +10,22 @@
 
 int counter = 0;
 
+void onReceive(int packetSize) {
+    // received a packet
+    Serial.print("Received packet '");
+
+    // read packet
+    for (int i = 0; i < packetSize; i++) {
+        Serial.print((char)LoRa.read());
+    }
+
+    // print RSSI of packet
+    Serial.print("' with RSSI ");
+    Serial.println(LoRa.packetRssi());
+    Serial.print("' and SNR ");
+    Serial.println(LoRa.packetSnr(), 3);
+}
+
 void setup() {
     Serial.begin(9600);
     while (!Serial) {};
@@ -25,6 +41,10 @@ void setup() {
     }
 
     LoRa.dumpRegisters(Serial);
+
+    // in receiver mode with callback (or alternatively poll in loop with receivePacket)
+    LoRa.onReceive(onReceive);
+    LoRa.receive();
 }
 
 void receivePacket() {
@@ -68,5 +88,5 @@ void sendPacket(int waitInMillis) {
 
 void loop() {
     //sendPacket(100);
-    receivePacket();
+    //receivePacket();
 }
