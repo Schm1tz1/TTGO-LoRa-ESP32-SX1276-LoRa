@@ -29,8 +29,6 @@ unsigned long lastSendTime = 0;
 
 Adafruit_SSD1306 ssd1306(OLED_SCREEN_WIDTH, OLED_SCREEN_HEIGHT, &Wire, OLED_RST);
 
-void initLoRa();
-
 void initSerial() {
     Serial.begin(SERIAL_BAUD);
     while (!Serial) {
@@ -96,14 +94,6 @@ void onReceive(int packetSize) {
     Serial.println();
 }
 
-void setup() {
-
-    initSerial();
-    //initOled();
-    initLoRa();
-
-}
-
 void initLoRa() {
 
     // override the default CS, reset, and IRQ pins (optional)
@@ -126,6 +116,14 @@ void initLoRa() {
     // in receiver mode with callback (or alternatively poll in loop with receivePacket)
     LoRa.onReceive(onReceive);
     LoRa.receive();
+}
+
+void setup() {
+
+    initSerial();
+    //initOled();
+    initLoRa();
+
 }
 
 void receivePacket() {
