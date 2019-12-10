@@ -8,11 +8,16 @@
 #include "PinsTTGO.h"
 #include "LoRa.h"
 
+#define USE_DISPLAY
+
+#ifdef USE_DISPLAY
 // headers for OLED Display
 #include "SpecsOLED.h"
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+
+#endif
 
 #define SERIAL_BAUD 9600
 
@@ -27,7 +32,9 @@ byte loraDestination = 0xFE;      // destination to send to
 unsigned long globalLoraPacketCounter = 0;
 unsigned long lastSendTime = 0;
 
-Adafruit_SSD1306 ssd1306(OLED_SCREEN_WIDTH, OLED_SCREEN_HEIGHT, &Wire, OLED_RST);
+#ifdef USE_DISPLAY
+Adafruit_SSD1306 display(OLED_SCREEN_WIDTH, OLED_SCREEN_HEIGHT, &Wire, OLED_RST);
+#endif
 
 void initSerial() {
     Serial.begin(SERIAL_BAUD);
@@ -35,6 +42,8 @@ void initSerial() {
         delay(10);
     }
 }
+
+#ifdef USE_DISPLAY
 
 void initOled() {
     //reset OLED display via software
@@ -45,54 +54,20 @@ void initOled() {
 
     //initialize OLED
     Wire.begin(OLED_SDA, OLED_SCL);
-    if (!ssd1306.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDRRESS, false, false)) {
+    if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDRRESS, false, false)) {
         Serial.println(F("SSD1306 allocation failed"));
         for (;;); // Don't proceed, loop forever
     }
 
-    ssd1306.clearDisplay();
-    ssd1306.setTextColor(WHITE);
-    ssd1306.setTextSize(1);
-    ssd1306.setCursor(0, 0);
-    ssd1306.print("LORA TTGO SX1276 TEST");
-    ssd1306.display();
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.print("LORA TTGO SX1276 TEST");
+    display.display();
 }
 
-void onReceive(int packetSize) {
-    if (packetSize == 0) return;          // if there's no packet, return
-    // read packet header bytes:
-    int recipient = LoRa.read();          // recipient address
-    byte sender = LoRa.read();            // sender address
-    byte incomingMsgId = LoRa.read();     // incoming msg ID
-    byte incomingLength = LoRa.read();    // incoming msg length
-
-    String incoming = "";                 // payload of packet
-
-    while (LoRa.available()) {            // can't use readString() in callback, so
-        incoming += (char) LoRa.read();      // add bytes one by one
-    }
-
-    if (incomingLength != incoming.length()) {   // check length for error
-        Serial.println("error: message length does not match length");
-        return;                             // skip rest of function
-    }
-
-    // if the recipient isn't this device or broadcast,
-    if (recipient != loraLocalAddress && recipient != loraDestination) {
-        Serial.println("This message is not for me.");
-        return;
-    }
-
-    // if message is for this device, or broadcast, print details:
-    Serial.println("Received from: 0x" + String(sender, HEX));
-    Serial.println("Sent to: 0x" + String(recipient, HEX));
-    Serial.println("Message ID: " + String(incomingMsgId));
-    Serial.println("Message length: " + String(incomingLength));
-    Serial.println("Message: " + incoming);
-    Serial.println("RSSI: " + String(LoRa.packetRssi()));
-    Serial.println("SNR: " + String(LoRa.packetSnr()));
-    Serial.println();
-}
+#endif
 
 void initLoRa() {
 
@@ -114,48 +89,73 @@ void initLoRa() {
     //LoRa.dumpRegisters(Serial);
 
     // in receiver mode with callback (or alternatively poll in loop with receivePacket)
-    LoRa.onReceive(onReceive);
-    LoRa.receive();
+    // TODO: still to be testes with ESP32-TTGO OLED. Together with OLED display the handler is not triggered while with seial-only output it works. Needs further debugging.
+    //LoRa.onReceive(onReceive);
+    //LoRa.receive();
+}
+
+void onReceive(int packetSize) {
+
+    if (packetSize) {
+        // received a packet
+        if (Serial) Serial.print("Received packet '");
+
+        //read packet
+        String LoRaData;
+        while (LoRa.available()) {
+            LoRaData = LoRa.readString();
+            Serial.print(LoRaData);
+        }
+
+        //print RSSI of packet
+        int rssi = LoRa.packetRssi();
+        float snr = LoRa.packetSnr();
+
+        // print RSSI of packet
+        if (Serial) {
+            Serial.print("' with RSSI ");
+            Serial.println(rssi);
+            Serial.print("' and SNR ");
+            Serial.println(snr, 3);
+        }
+
+#ifdef USE_DISPLAY
+        display.clearDisplay();
+        display.setCursor(0, 0);
+        display.print("LORA RECEIVER");
+        display.setCursor(0, 20);
+        display.print("Received packet:");
+        display.setCursor(0, 30);
+        display.print(LoRaData);
+        display.setCursor(0, 40);
+        display.print("RSSI:");
+        display.setCursor(30, 40);
+        display.print(rssi);
+        display.display();
+        display.print("SNR:");
+        display.setCursor(30, 50);
+        display.print(snr);
+        display.display();
+#endif
+
+    }
 }
 
 void setup() {
-
     initSerial();
-    //initOled();
+#ifdef USE_DISPLAY
+    initOled();
+#endif
     initLoRa();
 
 }
 
 void receivePacket() {
     int packetSize = LoRa.parsePacket();
-    if (packetSize) {
-        onReceive(packetSize);
-    }
-}
-
-void sendMessage(String outgoing) {
-    LoRa.beginPacket();                   // start packet
-    LoRa.write(loraDestination);              // add destination address
-    LoRa.write(loraLocalAddress);             // add sender address
-    LoRa.write(globalLoraPacketCounter);  // add message counter
-    LoRa.write(outgoing.length());        // add payload length
-    LoRa.print(outgoing);                 // add payload
-    LoRa.endPacket();                     // finish packet and send it
-    globalLoraPacketCounter++;
-}
-
-void sendPacketLoop(long waitInMillis = 500) {
-    if (millis() - lastSendTime > waitInMillis) {
-        String message = "Hello LoRa!";   // send a message
-        sendMessage(message);
-        Serial.println("Sending " + message);
-        lastSendTime = millis();            // timestamp the message
-        LoRa.receive();                     // go back into receive mode
-    }
+    onReceive(packetSize);
 }
 
 void loop() {
     // do nothing for callback or use polling send/receive
-//    sendPacketLoop();
-//    receivePacket();
+    receivePacket();
 }
