@@ -25,9 +25,6 @@
 //915000000 for North America
 #define LORA_BAND 866000000
 
-byte loraLocalAddress = 0xB5;     // address of this device
-byte loraDestination = 0xFE;      // destination to send to
-
 unsigned long globalLoraPacketCounter = 0;
 
 #ifdef USE_DISPLAY
